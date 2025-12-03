@@ -264,7 +264,7 @@ async function isItBirthday() {
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // Check version and clear cache if major update (1.x -> 2.x)
-    const currentVersion = '2.0.4';
+    const currentVersion = '2.0.5';
     const lastVersion = await window.electronStorage.getItem('app-version');
     
     if (lastVersion && lastVersion.startsWith('1.')) {

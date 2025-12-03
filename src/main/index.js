@@ -61,6 +61,27 @@ errorHandler.setupErrorHandlers();
 let mainWindow = null;
 let appTray = null;
 
+// Single instance lock - prevent multiple instances
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // Another instance is already running, quit this one
+  DEBUG && console.log('[APP] Another instance detected, quitting...');
+  app.quit();
+} else {
+  // This is the first instance, handle second-instance events
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    DEBUG && console.log('[APP] Second instance detected, showing existing window');
+    // Someone tried to run a second instance, we should focus our window instead
+    if (mainWindow) {
+      if (!mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+
 // App lifecycle
 app.whenReady().then(() => {
   DEBUG && console.log('[APP] Application ready, initializing...');
@@ -136,3 +157,5 @@ app.on('before-quit', () => {
   shortcuts.unregisterShortcuts();
   tray.destroyTray();
 });
+
+} // End of single instance lock else block
