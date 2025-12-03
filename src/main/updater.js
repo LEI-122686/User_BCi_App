@@ -10,14 +10,28 @@ autoUpdater.logger = require('electron-log');
 autoUpdater.logger.transports.file.level = 'debug';
 
 // Event handlers
-autoUpdater.on('update-available', () => {
+autoUpdater.on('checking-for-update', () => {
+  DEBUG && console.log('[UPDATER] Checking for update...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  DEBUG && console.log('[UPDATER] Update available:', info.version);
   const win = BrowserWindow.getFocusedWindow();
   if (win) {
     win.webContents.send('update-available');
   }
 });
 
+autoUpdater.on('update-not-available', (info) => {
+  DEBUG && console.log('[UPDATER] Update not available. Current version:', info.version);
+});
+
+autoUpdater.on('error', (err) => {
+  DEBUG && console.error('[UPDATER] Error:', err.message);
+});
+
 autoUpdater.on('download-progress', (progressObj) => {
+  DEBUG && console.log(`[UPDATER] Download progress: ${Math.round(progressObj.percent)}%`);
   const win = BrowserWindow.getFocusedWindow();
   if (win) {
     win.webContents.send('download-progress', {
@@ -29,6 +43,7 @@ autoUpdater.on('download-progress', (progressObj) => {
 });
 
 autoUpdater.on('update-downloaded', (info) => {
+  DEBUG && console.log('[UPDATER] Update downloaded:', info.version);
   const win = BrowserWindow.getFocusedWindow();
   if (win) {
     win.webContents.send('update-downloaded', info);
@@ -56,10 +71,11 @@ function setupUpdateHandlers() {
 // Check for updates (delayed start to avoid startup impact)
 function checkForUpdates() {
   setTimeout(() => {
+    DEBUG && console.log('[UPDATER] Checking for updates...');
     autoUpdater.checkForUpdates().catch(e => 
       DEBUG && console.log('[UPDATE] Check failed:', e.message)
     );
-  }, 5 * 60 * 1000); // 5 minutes
+  }, 10 * 1000); // 10 seconds after startup
 }
 
 module.exports = {
