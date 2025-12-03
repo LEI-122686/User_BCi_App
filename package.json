@@ -3,7 +3,12 @@
   "productName": "BCI",
   "version": "2.0.1",
   "description": "Aplicação oficial BCI",
-  "keywords": ["bci", "bizz", "casino", "management"],
+  "keywords": [
+    "bci",
+    "bizz",
+    "casino",
+    "management"
+  ],
   "license": "MIT",
   "author": {
     "name": "carpete_americana",
@@ -35,11 +40,12 @@
   "devDependencies": {
     "electron": "^35.1.4",
     "electron-builder": "^26.0.12",
-    "electronmon": "^2.0.3"
+    "electronmon": "^2.0.3",
+    "sharp": "^0.34.5"
   },
   "build": {
     "appId": "pt.bcibizz.UserApp",
-    "productName": "BCI",
+    "productName": "BCITESTE",
     "copyright": "Copyright © 2025 BCI Bizz",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": [
@@ -68,10 +74,12 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "icon": "build/bci.ico",
+      "icon": "build/app-icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false
@@ -82,8 +90,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "BCI",
-      "installerIcon": "build/bci.ico",
-      "uninstallerIcon": "build/bci.ico",
+      "installerIcon": "build/app-icon.ico",
+      "uninstallerIcon": "build/app-icon.ico",
       "license": "LICENSE",
       "deleteAppDataOnUninstall": false
     },
