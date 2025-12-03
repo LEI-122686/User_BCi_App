@@ -1,6 +1,6 @@
 {
   "name": "bci",
-  "productName": "BCI User App",
+  "productName": "BCI",
   "version": "2.0.0",
   "description": "Aplicação oficial BCI",
   "keywords": ["bci", "bizz", "casino", "management"],
@@ -72,8 +72,9 @@
         }
       ],
       "icon": "build/bci.ico",
-      "publisherName": "BCI Bizz",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
