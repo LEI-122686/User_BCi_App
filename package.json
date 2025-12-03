@@ -1,0 +1,109 @@
+{
+  "name": "bci",
+  "productName": "BCI User App",
+  "version": "2.0.0",
+  "description": "Aplicação oficial BCI",
+  "keywords": ["bci", "bizz", "casino", "management"],
+  "license": "MIT",
+  "author": {
+    "name": "carpete_americana",
+    "email": "support@bcibizz.pt"
+  },
+  "homepage": "https://bcibizz.pt",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/carpete-americana/User_BCi_App"
+  },
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electronmon .",
+    "build": "electron-builder",
+    "build:prod": "electron-builder --publish never",
+    "build:release": "electron-builder --publish always"
+  },
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.5.0",
+    "electron-log": "^5.4.2",
+    "electron-updater": "^6.6.2",
+    "fs": "^0.0.1-security",
+    "node-fetch": "^3.3.2",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "electron": "^35.1.4",
+    "electron-builder": "^26.0.12",
+    "electronmon": "^2.0.3"
+  },
+  "build": {
+    "appId": "pt.bcibizz.UserApp",
+    "productName": "BCI User App",
+    "copyright": "Copyright © 2025 BCI Bizz",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "js/**/*",
+      "assets/**/*",
+      "package.json",
+      ".env.production"
+    ],
+    "extraResources": [
+      {
+        "from": ".env.production",
+        "to": ".env"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "carpete-americana",
+        "repo": "User_BCi_App",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/bci.ico",
+      "publisherName": "BCI Bizz",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BCI User App",
+      "installerIcon": "build/bci.ico",
+      "uninstallerIcon": "build/bci.ico",
+      "license": "LICENSE"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build/icon.icns",
+      "category": "public.app-category.finance",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "icon": "build/icon.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/bci-rounded2.png",
+      "category": "Finance",
+      "maintainer": "carpete_americana"
+    }
+  }
+}

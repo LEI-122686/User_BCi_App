@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCi</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+     <!-- Barra Lateral -->
+     <div class="sidebar">
+        <div class="sidebar-header">
+            <img src="https://bcibizz.pt/assets/images/bci-extended.png" alt="Logo BCi">
+        </div>
+        <nav class="sidebar-menu" id="sidebar-menu">
+            <!-- Será preenchido dinamicamente pelo router.js -->
+        </nav>
+    </div>  
+
+<!-- Índicador de atualização - Design Moderno -->
+<div id="update-badge" class="update-notification">
+  <div class="notification-content">
+    <i class="fas fa-cloud-download-alt notification-icon"></i>
+    <div class="notification-text">
+      <span class="notification-title">Nova atualização disponível!</span>
+      <!-- <span class="notification-subtitle">Melhorias de desempenho e novas funcionalidades</span> --> 
+    </div>
+    <button id="download-update" class="notification-button">
+      <span>Descarregar agora</span>
+      <i class="fas fa-arrow-right button-icon"></i>
+    </button>
+  </div>
+  
+  <!-- Progresso do download -->
+  <div id="download-progress-container" class="download-progress">
+    <div class="progress-header">
+      <span id="progress-info-text">A Descarregar atualização...</span>
+      <span class="progress-percent" id="progress-text">0%</span>
+    </div>
+    <div class="progress-bar-container">
+      <div id="download-progress-bar" class="progress-bar-fill"></div>
+    </div>
+  </div>
+  
+  <!-- Botão de reinicialização -->
+  <button id="restart-button" class="restart-button" style="display: none;">
+    <i class="fas fa-sync-alt"></i>
+    <span>Reiniciar para instalar</span> <!-- Texto mais claro -->
+  </button>
+</div>
+
+<script>
+  // Mostrar o badge com animação quando houver atualização
+  window.electronAPI.onUpdateAvailable(() => {
+    const badge = document.getElementById('update-badge');
+    badge.style.display = 'block';
+    setTimeout(() => {
+      badge.classList.add('show');
+    }, 100);
+  });
+
+  // Baixar quando clicar
+  document.getElementById('download-update').addEventListener('click', () => {
+    // Mostrar o container de progresso
+    document.getElementById('download-progress-container').style.display = 'block';
+    
+    // Esconder o botão de download enquanto baixa
+    document.getElementById('download-update').style.display = 'none';
+    
+    // Iniciar o download
+    window.electronAPI.downloadUpdate();
+  });
+
+  // Monitorar progresso
+  window.electronAPI.onDownloadProgress((progress) => {
+    const percent = Math.round(progress.percent);
+    document.getElementById('download-progress-bar').style.width = `${percent}%`;
+    document.getElementById('progress-text').innerText = `${percent}%`;
+  });
+
+  // Quando o download estiver completo
+  window.electronAPI.onUpdateDownloaded(() => {
+    document.getElementById('download-progress-bar').style.width = '100%';
+    document.getElementById('progress-text').innerText = '100%';
+    document.getElementById('progress-info-text').innerText = 'Atualização pronta!';
+    
+    // Mostrar botão de reiniciar com animação
+    setTimeout(() => {
+      const restartBtn = document.getElementById('restart-button');
+      restartBtn.style.display = 'flex';
+      setTimeout(() => {
+        restartBtn.style.opacity = '1';
+      }, 50);
+    }, 1000);
+  });
+
+  // Reiniciar aplicação quando clicar
+  document.getElementById('restart-button').addEventListener('click', () => {
+    const btn = document.getElementById('restart-button');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    // Chamar método correto (corrigido de InstallAndUpdate para restartAndUpdate)
+    setTimeout(() => {
+        window.electronAPI.InstallAndUpdate();
+    }, 1500);
+  });
+</script>
+
+<style>
+  /* Adicione estas regras ao seu CSS */
+  .restart-button {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .fa-spin {
+    animation: fa-spin 1s infinite linear;
+  }
+  
+  @keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(359deg); }
+  }
+</style>
+
+    <!-- Cabeçalho -->
+    <header class="main-header">
+        <div class="search-bar">
+        </div>
+        
+        <div class="header-right">
+            <div class="notification">
+                <i class="fas fa-bell"></i>
+                <!-- <span class="notification-badge">0</span> -->
+            </div>
+            
+            <div class="user-profile">
+                <span class="user-name">Utilizador</span>
+                <div class="avatar-placeholder">
+                    <i class="fas fa-user"></i>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <div class="main-content" id="main-content">
+        <!-- O conteúdo será injetado aqui pelo router -->
+    </div>
+
+    <script type="module" src="../src/renderer/index.js"></script>
+    </div>
+
+
+    <div class="profile-card" id="profileCard">
+    <div class="profile-header">
+        <div class="profile-avatar">
+            <i class="fas fa-user-circle"></i>
+        </div>
+        <div class="profile-info">
+            <h3 class="user-name">Utilizador</h3>
+            <p class="email-field">user@bcibizz.pt</p>
+        </div>
+    </div>
+    
+    <div class="profile-menu">
+        <a href="#" class="profile-menu-item" onclick="">
+            <i class="fas fa-user-cog"></i> Perfil
+        </a>
+        <a href="#" class="profile-menu-item" onclick="">
+            <i class="fas fa-cog"></i> Definições
+        </a>
+        <a href="#" class="profile-menu-item" onclick="">
+            <i class="fas fa-shield-alt"></i> Segurança
+        </a>
+        <div class="profile-divider"></div>
+        <button class="profile-menu-item logout-btn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Terminar Sessão
+        </button>
+    </div>
+</div>
+
+<script>
+// Controle do Profile Card
+document.querySelector('.user-profile').addEventListener('click', function(e) {
+    e.stopPropagation();
+    const card = document.getElementById('profileCard');
+    card.classList.toggle('show');
+});
+
+// Fechar quando clicar fora
+document.addEventListener('click', function(e) {
+    const card = document.getElementById('profileCard');
+    if (!card.contains(e.target) && e.target.closest('.user-profile') === null) {
+        card.classList.remove('show');
+    }
+});
+
+function logout() {
+    window.electronAPI.logout();
+}
+
+</script>
+</body>
+</html>
