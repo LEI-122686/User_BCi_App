@@ -263,6 +263,31 @@ async function isItBirthday() {
 /* Init */
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    // Check version and clear cache if major update (1.x -> 2.x)
+    const currentVersion = '2.0.4';
+    const lastVersion = await window.electronStorage.getItem('app-version');
+    
+    if (lastVersion && lastVersion.startsWith('1.')) {
+      DEBUG && console.log('[VERSION] Major update detected, clearing all caches');
+      // Clear GitHub cache
+      await window.githubCache.clearAll();
+      // Clear browser cache
+      if (window.electronAPI && window.electronAPI.clearBrowserCache) {
+        await window.electronAPI.clearBrowserCache();
+      }
+      // Store new version
+      await window.electronStorage.setItem('app-version', currentVersion);
+      DEBUG && console.log('[VERSION] Cache cleared, reloading...');
+      // Reload to get fresh content
+      window.location.reload();
+      return;
+    }
+    
+    // Store version if not set
+    if (!lastVersion) {
+      await window.electronStorage.setItem('app-version', currentVersion);
+    }
+    
     // Network status banner handlers
     window.addEventListener('offline', () => {
       if (document.getElementById('offline-start-flag')) return;

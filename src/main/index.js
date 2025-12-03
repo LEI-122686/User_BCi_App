@@ -38,6 +38,15 @@ ipcMain.handle('metrics:getSummary', () => metrics.getMetricsSummary());
 ipcMain.handle('navigate', window.handleNavigate);
 ipcMain.handle('logout', window.handleLogout);
 
+// IPC Handlers - Cache Management
+ipcMain.handle('cache:clearBrowser', async (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (win) {
+    await win.webContents.session.clearCache();
+    DEBUG && console.log('[CACHE] Browser cache cleared');
+  }
+});
+
 // IPC Handlers - Storage
 ipcMain.handle('storage:set', (e, k, v) => ElectronStorage.setItem(k, v));
 ipcMain.handle('storage:get', (e, k) => ElectronStorage.getItem(k));

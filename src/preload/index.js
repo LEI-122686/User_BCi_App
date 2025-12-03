@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getDebugMode: () => ipcRenderer.invoke('app:getDebugMode'),
     rendererReady: () => ipcRenderer.send('renderer:ready'),
     navigate: (filePath) => ipcRenderer.invoke('navigate', filePath),
+    clearBrowserCache: () => ipcRenderer.invoke('cache:clearBrowser'),
     
     // Metrics
     trackPageLoad: (pageName, startTime) => ipcRenderer.invoke('metrics:trackPageLoad', pageName, startTime),
