@@ -1,8 +1,8 @@
-// GitHub cache module with rate limiting and retry logic
+// Frontend API cache module with rate limiting and retry logic
 const ElectronStorage = require('../../js/storage');
-const { GITHUB_CONFIG, DEBUG } = require('./config');
+const { API_CONFIG, GITHUB_CONFIG, DEBUG } = require('./config');
 
-const STORAGE_PREFIX = GITHUB_CONFIG.STORAGE_PREFIX;
+const STORAGE_PREFIX = API_CONFIG.STORAGE_PREFIX;
 
 // Exponential backoff configuration
 const RETRY_CONFIG = {
@@ -14,52 +14,23 @@ const RETRY_CONFIG = {
 // Offline request queue
 let offlineQueue = [];
 let isOnline = true;
-const OWNER = GITHUB_CONFIG.OWNER;
-const REPO = GITHUB_CONFIG.REPO;
-const BRANCH = GITHUB_CONFIG.BRANCH;
 
-// Rate limiting for GitHub API calls (50/hour without token, 4500/hour with token)
-const rateLimitQueue = [];
-let rateLimitProcessing = false;
-
-async function rateLimitedFetch(url, options) {
-  return new Promise((resolve, reject) => {
-    rateLimitQueue.push({ url, options, resolve, reject });
-    processRateLimitQueue();
-  });
-}
-
-async function processRateLimitQueue() {
-  if (rateLimitProcessing || rateLimitQueue.length === 0) return;
-  rateLimitProcessing = true;
-  
-  const { url, options, resolve, reject } = rateLimitQueue.shift();
-  
-  try {
-    const resp = await fetch(url, options);
-    resolve(resp);
-  } catch (err) {
-    reject(err);
-  }
-  
-  // Wait 750ms between requests (allows ~48 calls/min = safe for 50/hour limit)
-  setTimeout(() => {
-    rateLimitProcessing = false;
-    processRateLimitQueue();
-  }, 750);
-}
+// No rate limiting needed for our own API (handled by the server)
+// Requests are made directly without queue delays
 
 /**
- * Fetch a file from the GitHub repo with ETag-based caching and configurable TTL.
+ * Fetch a file from the Frontend API with ETag-based caching and configurable TTL.
  * @param {string} pathRel - Relative path (e.g., "login/index.html")
- * @param {string} basePath - Base path prefix (e.g., "pages/", "" for repo root)
+ * @param {string} basePath - Base path prefix (e.g., "pages/", "" for assets)
  * @param {number} ttl - Time-to-live in milliseconds
  */
-async function githubFetchWithCache(pathRel, basePath, ttl) {
+async function apiFetchWithCache(pathRel, basePath, ttl) {
   const key = STORAGE_PREFIX + pathRel;
   const cached = ElectronStorage.getItem(key);
   const now = Date.now();
-  const url = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/${basePath}${pathRel}`;
+  
+  const filePath = `${basePath}${pathRel}`;
+  const url = `${API_CONFIG.BASE_URL}${API_CONFIG.FILES_ENDPOINT}/${filePath}`;
 
   // Validate URL before fetching
   const security = require('./security');
@@ -67,20 +38,30 @@ async function githubFetchWithCache(pathRel, basePath, ttl) {
     throw new Error(`Unsafe URL blocked: ${url}`);
   }
 
+  // Check if cached version is still valid
+  if (cached && cached.fetchedAt && (now - cached.fetchedAt < ttl)) {
+    DEBUG && console.log(`[API CACHE HIT] ${pathRel} (${Math.round((now - cached.fetchedAt) / 1000)}s old)`);
+    return cached;
+  }
+
+  DEBUG && console.log(`[API FETCH] ${url}`);
+
   const doFetch = async (retryCount = 0) => {
     try {
-      const headers = { 'User-Agent': 'electron-app' };
+      const headers = {};
+      
+      // Add ETag if we have one cached
       if (cached && cached.etag) {
         headers['If-None-Match'] = cached.etag;
       }
+      
       const resp = await fetch(url, { headers });
       
       // Handle 304 Not Modified
       if (resp.status === 304 && cached) {
-        // Update fetchedAt timestamp but keep existing content
         cached.fetchedAt = now;
         ElectronStorage.setItem(key, cached);
-        DEBUG && console.log(`[CACHE HIT] ${pathRel} (304 Not Modified)`);
+        DEBUG && console.log(`[API CACHE HIT] ${pathRel} (304 Not Modified)`);
         
         // Track cache hit
         try {
@@ -96,7 +77,7 @@ async function githubFetchWithCache(pathRel, basePath, ttl) {
         const etag = resp.headers.get('etag');
         const payload = { content: text, etag, fetchedAt: now };
         ElectronStorage.setItem(key, payload);
-        DEBUG && console.log(`[CACHE MISS] ${pathRel} (fetched fresh)`);
+        DEBUG && console.log(`[API SUCCESS] ${pathRel} (${text.length} bytes)`);
         
         // Track cache miss
         try {
@@ -106,7 +87,18 @@ async function githubFetchWithCache(pathRel, basePath, ttl) {
         
         return payload;
       }
-      throw new Error(`HTTP ${resp.status}: ${url}`);
+      
+      // Handle errors
+      if (resp.status === 404) {
+        throw new Error(`File not found: ${pathRel}`);
+      }
+      
+      if (resp.status === 429) {
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+      
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      
     } catch (err) {
       // Exponential backoff retry with jitter
       if (retryCount < RETRY_CONFIG.maxRetries) {
@@ -119,16 +111,18 @@ async function githubFetchWithCache(pathRel, basePath, ttl) {
         return doFetch(retryCount + 1);
       }
       
+      DEBUG && console.error(`[API ERROR] ${pathRel}:`, err);
+      
+      // Return cached version if available (even if expired)
+      if (cached && cached.content) {
+        console.warn(`[API FALLBACK] Using stale cache for ${pathRel}`);
+        return cached;
+      }
+      
       // If all retries failed and offline, queue the request
       if (!isOnline) {
         DEBUG && console.log(`[OFFLINE QUEUE] Adding ${pathRel} to queue`);
-        offlineQueue.push({ pathRel, basePath, ttl, resolve: null, reject: null });
-        
-        // Return cached version if available
-        if (cached) {
-          DEBUG && console.log(`[OFFLINE] Returning stale cache for ${pathRel}`);
-          return cached;
-        }
+        offlineQueue.push({ pathRel, basePath, ttl });
       }
       
       throw err;
@@ -139,14 +133,14 @@ async function githubFetchWithCache(pathRel, basePath, ttl) {
 
 // IPC handler to fetch page content with cache
 function handleFetch(event, pathRel, ttl) {
-  const effectiveTTL = ttl || GITHUB_CONFIG.PAGE_TTL;
-  return githubFetchWithCache(pathRel, 'pages/', effectiveTTL);
+  const effectiveTTL = ttl || API_CONFIG.PAGE_TTL;
+  return apiFetchWithCache(pathRel, 'pages/', effectiveTTL);
 }
 
-// IPC handler to fetch assets from repo root
+// IPC handler to fetch assets from assets folder
 function handleFetchAsset(event, pathRel, ttl) {
-  const effectiveTTL = ttl || GITHUB_CONFIG.ASSET_TTL;
-  return githubFetchWithCache(pathRel, '', effectiveTTL);
+  const effectiveTTL = ttl || API_CONFIG.ASSET_TTL;
+  return apiFetchWithCache(pathRel, 'assets/', effectiveTTL);
 }
 
 // IPC handler to clear cache for a specific file
@@ -162,32 +156,26 @@ function handleClearAll() {
 }
 
 /**
- * List CSS files under assets/css in the repo using GitHub Contents API.
+ * List CSS files under assets/css from the Frontend API.
  */
 async function listCssFiles() {
   try {
-    DEBUG && console.log('[assets:listCss] attempting GitHub Contents API...');
-    const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/assets/css?ref=${BRANCH}`;
-    const headers = { 
-      'User-Agent': 'electron-app', 
-      'Accept': 'application/vnd.github.v3+json' 
-    };
+    DEBUG && console.log('[assets:listCss] fetching from Frontend API...');
+    const apiUrl = `${API_CONFIG.BASE_URL}/api/list`;
     
-    // Add GitHub token if available to increase rate limit (60 -> 5000 req/hour)
-    if (process.env.GITHUB_TOKEN) {
-      headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
-    }
-    
-    const resp = await rateLimitedFetch(apiUrl, { headers });
+    const resp = await fetch(apiUrl);
     if (resp && resp.ok) {
       const data = await resp.json();
-      if (Array.isArray(data)) {
-        const files = data.filter(f => f && f.type === 'file' && f.name && f.name.endsWith('.css')).map(f => f.name);
-        DEBUG && console.log('[assets:listCss] ✓ GitHub API success:', files);
-        return files;
+      if (data && data.success && Array.isArray(data.files)) {
+        // Filter CSS files from assets/css/
+        const cssFiles = data.files
+          .filter(f => f.startsWith('assets/css/') && f.endsWith('.css'))
+          .map(f => f.replace('assets/css/', ''));
+        DEBUG && console.log('[assets:listCss] ✓ API success:', cssFiles);
+        return cssFiles;
       }
     }
-    console.warn('[assets:listCss] ✗ GitHub API failed with status', resp?.status);
+    console.warn('[assets:listCss] ✗ API failed with status', resp?.status);
     return [];
   } catch (e) {
     console.error('[assets:listCss] error:', e.message);
@@ -196,32 +184,26 @@ async function listCssFiles() {
 }
 
 /**
- * List JS files under assets/js in the repo using GitHub Contents API.
+ * List JS files under assets/js from the Frontend API.
  */
 async function listJsFiles() {
   try {
-    DEBUG && console.log('[assets:listJs] attempting GitHub Contents API...');
-    const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/assets/js?ref=${BRANCH}`;
-    const headers = { 
-      'User-Agent': 'electron-app', 
-      'Accept': 'application/vnd.github.v3+json' 
-    };
+    DEBUG && console.log('[assets:listJs] fetching from Frontend API...');
+    const apiUrl = `${API_CONFIG.BASE_URL}/api/list`;
     
-    // Add GitHub token if available to increase rate limit (60 -> 5000 req/hour)
-    if (process.env.GITHUB_TOKEN) {
-      headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
-    }
-    
-    const resp = await rateLimitedFetch(apiUrl, { headers });
+    const resp = await fetch(apiUrl);
     if (resp && resp.ok) {
       const data = await resp.json();
-      if (Array.isArray(data)) {
-        const files = data.filter(f => f && f.type === 'file' && f.name && f.name.endsWith('.js')).map(f => f.name);
-        DEBUG && console.log('[assets:listJs] ✓ GitHub API success:', files);
-        return files;
+      if (data && data.success && Array.isArray(data.files)) {
+        // Filter JS files from assets/js/
+        const jsFiles = data.files
+          .filter(f => f.startsWith('assets/js/') && f.endsWith('.js'))
+          .map(f => f.replace('assets/js/', ''));
+        DEBUG && console.log('[assets:listJs] ✓ API success:', jsFiles);
+        return jsFiles;
       }
     }
-    console.warn('[assets:listJs] ✗ GitHub API failed with status', resp?.status);
+    console.warn('[assets:listJs] ✗ API failed with status', resp?.status);
     return [];
   } catch (e) {
     console.error('[assets:listJs] error:', e.message);
@@ -232,11 +214,11 @@ async function listJsFiles() {
 // Clean old cache entries (remove entries older than MAX_CACHE_AGE)
 function cleanOldCache() {
   const now = Date.now();
-  const keys = Object.keys(ElectronStorage.data).filter(k => k.startsWith(GITHUB_CONFIG.STORAGE_PREFIX));
+  const keys = Object.keys(ElectronStorage.data).filter(k => k.startsWith(API_CONFIG.STORAGE_PREFIX));
   let cleaned = 0;
   keys.forEach(k => {
     const item = ElectronStorage.getItem(k);
-    if (item && item.fetchedAt && (now - item.fetchedAt > GITHUB_CONFIG.MAX_CACHE_AGE)) {
+    if (item && item.fetchedAt && (now - item.fetchedAt > API_CONFIG.MAX_CACHE_AGE)) {
       ElectronStorage.removeItem(k);
       cleaned++;
     }
@@ -268,7 +250,7 @@ async function processOfflineQueue() {
   
   for (const { pathRel, basePath, ttl } of queue) {
     try {
-      await githubFetchWithCache(pathRel, basePath, ttl);
+      await apiFetchWithCache(pathRel, basePath, ttl);
       DEBUG && console.log(`[OFFLINE QUEUE] ✓ Synced ${pathRel}`);
     } catch (err) {
       DEBUG && console.log(`[OFFLINE QUEUE] ✗ Failed to sync ${pathRel}:`, err.message);
@@ -286,8 +268,8 @@ async function preloadFrequentPages() {
   
   for (const page of frequentPages) {
     try {
-      await githubFetchWithCache(`${page}/index.html`, 'pages/', GITHUB_CONFIG.PAGE_TTL);
-      await githubFetchWithCache(`${page}/styles.css`, 'pages/', GITHUB_CONFIG.PAGE_TTL);
+      await apiFetchWithCache(`${page}/index.html`, 'pages/', API_CONFIG.PAGE_TTL);
+      await apiFetchWithCache(`${page}/styles.css`, 'pages/', API_CONFIG.PAGE_TTL);
       DEBUG && console.log(`[CACHE] ✓ Preloaded ${page}`);
     } catch (err) {
       DEBUG && console.log(`[CACHE] ✗ Failed to preload ${page}:`, err.message);
@@ -309,11 +291,11 @@ function startBackgroundSync() {
       const jsFiles = await listJsFiles();
       
       for (const file of cssFiles) {
-        await githubFetchWithCache(`assets/css/${file}`, '', GITHUB_CONFIG.ASSET_TTL);
+        await apiFetchWithCache(`css/${file}`, 'assets/', API_CONFIG.ASSET_TTL);
       }
       
       for (const file of jsFiles) {
-        await githubFetchWithCache(`assets/js/${file}`, '', GITHUB_CONFIG.ASSET_TTL);
+        await apiFetchWithCache(`js/${file}`, 'assets/', API_CONFIG.ASSET_TTL);
       }
       
       DEBUG && console.log('[BACKGROUND SYNC] Cache refresh complete');

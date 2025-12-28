@@ -1,8 +1,22 @@
-// Configuration for GitHub cache and app settings
+// Configuration for Frontend API cache and app settings
 require('dotenv').config();
 
 const DEBUG = process.env.DEBUG === 'true' || false;
 
+// Frontend API configuration (replaces GitHub direct access)
+const API_CONFIG = {
+  BASE_URL: process.env.API_BASE_URL || "https://bcibizz.pt/frontend-api",
+  FILES_ENDPOINT: "/files",
+  API_ENDPOINT: "/api/file",
+  STORAGE_PREFIX: "api-cache:",
+  DEFAULT_TTL: 24 * 60 * 60 * 1000,
+  PAGE_TTL: 1 * 60 * 60 * 1000,
+  ASSET_TTL: 12 * 60 * 60 * 1000,
+  CONFIG_TTL: 30 * 60 * 1000,
+  MAX_CACHE_AGE: 7 * 24 * 60 * 60 * 1000,
+};
+
+// Legacy GitHub config - mantido para retrocompatibilidade se necessário
 const GITHUB_CONFIG = {
   OWNER: "carpete-americana",
   REPO: "bci-frontend",
@@ -23,6 +37,7 @@ const routes = {
 };
 
 module.exports = {
+  API_CONFIG,
   GITHUB_CONFIG,
   DEBUG,
   routes
