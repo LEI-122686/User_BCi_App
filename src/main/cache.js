@@ -137,10 +137,11 @@ function handleFetch(event, pathRel, ttl) {
   return apiFetchWithCache(pathRel, 'pages/', effectiveTTL);
 }
 
-// IPC handler to fetch assets from assets folder
+// IPC handler to fetch assets (path already includes 'assets/' prefix)
 function handleFetchAsset(event, pathRel, ttl) {
   const effectiveTTL = ttl || API_CONFIG.ASSET_TTL;
-  return apiFetchWithCache(pathRel, 'assets/', effectiveTTL);
+  // Don't add prefix - pathRel already contains full path like 'assets/js/utils.js'
+  return apiFetchWithCache(pathRel, '', effectiveTTL);
 }
 
 // IPC handler to clear cache for a specific file
